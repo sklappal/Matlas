@@ -52,8 +52,10 @@ function App() {
       Log(points[points.length-1], "Last");
       dashes();
       drawRoute(points);
+      prev = undefined;
+    } else {
+      prev = pos;
     }
-    prev = pos;
     console.log("-------");
   }
   
