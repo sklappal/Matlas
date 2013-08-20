@@ -33,6 +33,12 @@ function App() {
   var prev = undefined;
   
   function OnMouseDown(ev) {
+    
+    if (ev.which == 3) {
+      Draw();
+      return;
+    }
+    
     x = ev.clientX;
     y = ev.clientY;
     canv = ScreenToWorld(ev.clientX, ev.clientY);
@@ -54,11 +60,32 @@ function App() {
   
   
   function onLeft(p) {
-    return (p.x < -Math.PI*0.75);
+    return (p.x < -0.5*Math.PI);
   }
   
   function onRight(p) {
-    return (p.x > Math.PI*0.75);
+    return (p.x > 0.5*Math.PI);
+  }
+
+  // Interpolate linearly to the border, draw a line, then continue on the other side
+
+  function handleMidPoint(context, prevPointSpherical, curPoint) {
+    var prevC = SphericalToCanvas(prevPointSpherical);
+    var left = onLeft(prevPointSpherical);
+    
+    var distFromBorderPrev = left ? prevC.x : (GetCanvas().width - prevC.x); 
+    var distFromBorderCur = left ? (GetCanvas().width - curPoint.x) : curPoint.x;
+    assert(distFromBorderPrev >= 0, "Distance not positive!");
+    
+    var dx = distFromBorderPrev + distFromBorderCur;
+    assert(distFromBorderPrev <= dx, "WHAT");
+    
+    var t = distFromBorderPrev / dx;
+    var yCoord = t * prevC.y + (1.0-t) * curPoint.y;
+    context.lineTo(left ? 0 : GetCanvas().width-1, yCoord);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(left ? GetCanvas().width-1 : 0, yCoord);
   }
 
   function drawRoute(points) {
@@ -73,14 +100,13 @@ function App() {
       var ps = CartesianToSpherical(points[i]);
       var p = SphericalToCanvas(ps);
       if ((onLeft(prev) && onRight(ps)) || (onRight(prev) && onLeft(ps))) {
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
+        handleMidPoint(ctx, prev, p);
       }
       prev = ps;
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
+    
   }
   
   function Log(coord, pre) {
@@ -162,12 +188,12 @@ function App() {
     return pos1.x * pos2.x + pos1.y * pos2.y + pos1.z * pos2.z;
   }
   
-  function epsilonEqual(v1, v2) {
+  function almostEqual(v1, v2) {
     return Math.abs(v1-v2) < 1e-6;
   }
   
-  function epsilonZero(v1) {
-    return epsilonEqual(v1, 0.0);
+  function almostZero(v1) {
+    return almostEqual(v1, 0.0);
   }
   
   function assert(cond, msg) {
@@ -176,13 +202,13 @@ function App() {
     }
   }
   
-  
   function slerp(pos1, pos2) {
     ret = []
-    points = 32.0;
-    incr = 1.0 / points;
     omega = Math.acos(dot(pos1, pos2));
-    assert(!epsilonZero(omega), "Zero angle between vectors");
+    assert(!almostZero(omega), "Zero angle between vectors");
+    points = 30 * omega;
+    incr = 1.0 / points;
+    
     sinOmega = Math.sin(omega);
     omegaCoeff = 1.0 / sinOmega;
     ret.push(pos1);
@@ -199,7 +225,6 @@ function App() {
         });
     }
     ret.push(pos2);
-    assert(epsilonEqual(ret.length, points));
     return ret;
   }
   
