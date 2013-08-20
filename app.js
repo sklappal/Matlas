@@ -37,26 +37,15 @@ function App() {
     y = ev.clientY;
     canv = ScreenToWorld(ev.clientX, ev.clientY);
     
-    
     pos = WorldToCartesian(canv); 
-    dashes();
-    Log(canv, "Original: ");
-    Log(pos, "Cartesian: ");
-    Log(CartesianToWorld(pos), "Inverted: ")
-    dashes();
-    
     
     if (prev != undefined) {
       points = slerp(pos, prev);
-      Log(points[0], "1st");
-      Log(points[points.length-1], "Last");
-      dashes();
       drawRoute(points);
       prev = undefined;
     } else {
       prev = pos;
     }
-    console.log("-------");
   }
   
   function dashes() {
@@ -64,31 +53,31 @@ function App() {
   }
   
   
-  function onLeftHalf(p) {
-    return p.x < 0.5;
+  function onLeft(p) {
+    return (p.x < -Math.PI*0.75);
   }
   
-  // FIXME: Holes in path and not nice. 
-  // Solution: Determine beforehand if route wraps around (Phi goes from ~2pi to ~0). Then slerp some additional points to the offending segment.
+  function onRight(p) {
+    return (p.x > Math.PI*0.75);
+  }
+
   function drawRoute(points) {
     var ctx = GetContext();
     ctx.lineWidth = 3;
     ctx.strokeStyle = "#AA00AA"
     ctx.beginPath();
-    var pw1 = CartesianToWorld(points[0]);
-    var curSide = onLeftHalf(pw1);
-    p1 = WorldToCanvas(pw1);
+    var prev = CartesianToSpherical(points[0]);
+    p1 = SphericalToCanvas(prev);
     ctx.moveTo(p1.x, p1.y);
-    
     for (i = 1; i < points.length; i++) {
-      var pw = CartesianToWorld(points[i]);
-      var p = WorldToCanvas(pw);
-      if (curSide != onLeftHalf(pw)) {
+      var ps = CartesianToSpherical(points[i]);
+      var p = SphericalToCanvas(ps);
+      if ((onLeft(prev) && onRight(ps)) || (onRight(prev) && onLeft(ps))) {
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
       }
-      curSide = onLeftHalf(pw);
+      prev = ps;
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
@@ -109,7 +98,7 @@ function App() {
   
   // Screen/canvas: pixels [0, w] x [0, h]
   // World: [0,1] x [0,1]
-  // Spher: [0, 2pi] x [0, pi]
+  // Spher: [-pi0, pi] x [0, pi]
   // Cartesian: [-1, 1] x [-1, 1] x [-1, 1]
   // LongLat: [-pi, pi] x [0, pi/2] (y mirrored)
   
@@ -135,6 +124,8 @@ function App() {
   CartesianToWorld = compose(SphericalToWorld, CartesianToSpherical);
   
   CartesianToCanvas = compose(WorldToCanvas, CartesianToWorld);
+
+  SphericalToCanvas = compose(WorldToCanvas, SphericalToWorld);
 
  
   function WorldToLongLat(coord) {
