@@ -46,6 +46,12 @@ function App() {
     pos = WorldToCartesian(canv); 
     
     if (prev != undefined) {
+      
+      if (almostEqual(prev.x, pos.x) && almostEqual(prev.y, pos.y) && almostEqual(prev.z, pos.z)) {
+        prev = undefined;
+        return;
+      }
+      
       points = slerp(pos, prev);
       drawRoute(points);
       prev = undefined;
@@ -53,11 +59,6 @@ function App() {
       prev = pos;
     }
   }
-  
-  function dashes() {
-    console.log("--");
-  }
-  
   
   function onLeft(p) {
     return (p.x < -0.5*Math.PI);
@@ -88,16 +89,13 @@ function App() {
     context.moveTo(left ? GetCanvas().width-1 : 0, yCoord);
   }
 
-  function drawRoute(points) {
-    var ctx = GetContext();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#AA00AA"
+  function drawPolyLine(ctx, points) {
     ctx.beginPath();
-    var prev = CartesianToSpherical(points[0]);
+    var prev = points[0];
     p1 = SphericalToCanvas(prev);
     ctx.moveTo(p1.x, p1.y);
     for (i = 1; i < points.length; i++) {
-      var ps = CartesianToSpherical(points[i]);
+      var ps = points[i];
       var p = SphericalToCanvas(ps);
       if ((onLeft(prev) && onRight(ps)) || (onRight(prev) && onLeft(ps))) {
         handleMidPoint(ctx, prev, p);
@@ -106,7 +104,41 @@ function App() {
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
+  }
+  
+  
+  function drawFilledCircle(posx, posy, radius, color) {
+    var ctx = GetContext();
+    ctx.beginPath();
+    var counterClockwise = false;
+    ctx.arc(posx, posy, radius, 0, 2 * Math.PI, counterClockwise);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+  }
+
+  function drawRoute(route) {
+    var points = route.shortest;
+    var ctx = GetContext();
     
+    var first = SphericalToCanvas(points[0]);
+    var last = SphericalToCanvas(points[points.length-1]);
+    
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "black"
+    drawPolyLine(ctx, points);
+    
+    ctx.lineWidth = 1;
+    drawPolyLine(ctx, route.complement);
+    
+    drawFilledCircle(first.x, first.y, 5, "magenta");
+    drawFilledCircle(last.x, last.y, 5, "magenta");
+    
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "magenta"
+    drawPolyLine(ctx, points);
   }
   
   function Log(coord, pre) {
@@ -211,21 +243,38 @@ function App() {
     
     sinOmega = Math.sin(omega);
     omegaCoeff = 1.0 / sinOmega;
-    ret.push(pos1);
+    ret.push(CartesianToSpherical(pos1));
+    var t = 0;
     for (i = 1; i < points-1; i++) {
       t = i * incr;
       
       coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
       coeff2 = Math.sin(t * omega) * omegaCoeff;
       
-      ret.push({
+      ret.push(CartesianToSpherical({
         x: pos1.x * coeff1 + pos2.x * coeff2,
         y: pos1.y * coeff1 + pos2.y * coeff2,
         z: pos1.z * coeff1 + pos2.z * coeff2
-        });
+        }));
     }
-    ret.push(pos2);
-    return ret;
+    ret.push(CartesianToSpherical(pos2));
+    
+    ret2 = [];
+    
+    while (t * omega < 2 * Math.PI) {
+      coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
+      coeff2 = Math.sin(t * omega) * omegaCoeff;
+      
+      ret2.push(CartesianToSpherical({
+        x: pos1.x * coeff1 + pos2.x * coeff2,
+        y: pos1.y * coeff1 + pos2.y * coeff2,
+        z: pos1.z * coeff1 + pos2.z * coeff2
+        }));
+      t += incr;
+      
+    }
+    
+    return {shortest: ret, complement: ret2};
   }
   
   return this;

@@ -11,13 +11,27 @@ function Start() {
 }
 
 </script>
+<style>
+body {background-color:black;}
+canvas {
+  border-style: solid;
+  border-width: 3px;
+  border-color: blue;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-top: -450px; 
+  margin-left: -780px;
+}
+
+</style>
 </head>
 
 <body onload="Start();">
 
 <div align="center">
   <!-- image size 1920x1200 -->
-<canvas id="canvas" width="1560" height="900" style="margin: 0px; padding: 0px" oncontextmenu="return false;">&nbsp;</canvas>
+<canvas id="canvas" width="1560" height="900" oncontextmenu="return false;">&nbsp;</canvas>
 </div>
 
 </body>
