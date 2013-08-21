@@ -82,7 +82,7 @@ function App() {
     assert(distFromBorderPrev <= dx, "WHAT");
     
     var t = distFromBorderPrev / dx;
-    var yCoord = t * prevC.y + (1.0-t) * curPoint.y;
+    var yCoord = Math.round(t * prevC.y + (1.0-t) * curPoint.y);
     context.lineTo(left ? 0 : GetCanvas().width-1, yCoord);
     context.stroke();
     context.beginPath();
@@ -131,6 +131,7 @@ function App() {
     drawPolyLine(ctx, points);
     
     ctx.lineWidth = 1;
+    ctx.strokeStyle = "grey"
     drawPolyLine(ctx, route.complement);
     
     drawFilledCircle(first.x, first.y, 5, "magenta");
