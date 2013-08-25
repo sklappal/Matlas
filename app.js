@@ -2,10 +2,6 @@ function App() {
   
   this.Start = function() {
     GetCanvas().onmousedown = OnMouseDown;
-  /*  GetCanvas().onmouseup = OnMouseUp;
-    GetCanvas().onmousemove = OnMouseMove;
-    
-    document.onkeydown = OnKey;*/
     
     this.imageObj = new Image();
 
@@ -19,6 +15,10 @@ function App() {
   
   function Draw() {
     GetContext().drawImage(this.imageObj, 0, 0, GetCanvas().width, GetCanvas().height);
+    for (var i = 0; i < routes.length; i++) {
+      drawRoute(routes[i]);
+    }
+    drawInstructions();
   }
   
   
@@ -32,17 +32,26 @@ function App() {
   
   var prev = undefined;
   
+  var routes = [];
+  var drawComplement = false;
+
+
   function OnMouseDown(ev) {
     
     if (ev.which == 3) {
+      routes = [];
+      prev = undefined;
       Draw();
       return;
     }
     
-    x = ev.clientX;
-    y = ev.clientY;
-    canv = ScreenToWorld(ev.clientX, ev.clientY);
+    if (ev.which == 2) {
+      drawComplement = !drawComplement;
+      Draw();
+      return;
+    }
     
+    canv = ScreenToWorld(ev.clientX-2, ev.clientY-2);
     pos = WorldToCartesian(canv); 
     
     if (prev != undefined) {
@@ -52,11 +61,13 @@ function App() {
         return;
       }
       
-      points = slerp(pos, prev);
-      drawRoute(points);
+      routes.push(slerp(pos, prev));
+      Draw();
       prev = undefined;
     } else {
       prev = pos;
+      var tmp = CartesianToCanvas(pos);
+      drawFilledCircle(tmp.x, tmp.y, 5, "magenta");
     }
   }
   
@@ -118,7 +129,7 @@ function App() {
     ctx.strokeStyle = "black";
     ctx.stroke();
   }
-
+  
   function drawRoute(route) {
     var points = route.shortest;
     var ctx = GetContext();
@@ -130,9 +141,11 @@ function App() {
     ctx.strokeStyle = "black"
     drawPolyLine(ctx, points);
     
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "grey"
-    drawPolyLine(ctx, route.complement);
+    if (drawComplement) {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "grey"
+      drawPolyLine(ctx, route.complement);
+    }
     
     drawFilledCircle(first.x, first.y, 5, "magenta");
     drawFilledCircle(last.x, last.y, 5, "magenta");
@@ -140,6 +153,21 @@ function App() {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "magenta"
     drawPolyLine(ctx, points);
+    
+    midpoint = SphericalToCanvas(points[Math.floor(points.length / 2)]);
+    ctx.fillStyle = "black"
+    ctx.font = "24px Segoe UI"
+    var text = (route.angle * 6371).toFixed(0) + " km";
+    ctx.fillText(text, midpoint.x-50, midpoint.y);
+  }
+  
+  function drawInstructions() {
+    var ctx = GetContext();
+    ctx.font = "12px Segoe UI";
+    ctx.fillStyle = "black";
+    ctx.fillText("Mouse 1: Draw routes", GetCanvas().width - 300, GetCanvas().height - 80);
+    ctx.fillText("Mouse 2: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", GetCanvas().width - 300, GetCanvas().height - 60);
+    ctx.fillText("Mouse 3: Clear routes", GetCanvas().width - 300, GetCanvas().height - 40);
   }
   
   function Log(coord, pre) {
@@ -165,7 +193,7 @@ function App() {
   
   function ScreenToWorld(sx, sy) {
     rect = GetCanvas().getBoundingClientRect();
-    return { x: (sx - rect.left + 0.5) / GetCanvas().width, y: (sy - rect.top) / GetCanvas().height }; // hhhhh
+    return { x: (sx - rect.left) / GetCanvas().width, y: (sy - rect.top) / GetCanvas().height };
   }
   
   function WorldToCanvas(coord) {
@@ -275,7 +303,7 @@ function App() {
       
     }
     
-    return {shortest: ret, complement: ret2};
+    return {shortest: ret, complement: ret2, angle: omega};
   }
   
   return this;
