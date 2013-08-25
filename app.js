@@ -267,7 +267,7 @@ function App() {
     ret = []
     omega = Math.acos(dot(pos1, pos2));
     assert(!almostZero(omega), "Zero angle between vectors");
-    points = 30 * omega;
+    points = 50 * omega;
     incr = 1.0 / points;
     
     sinOmega = Math.sin(omega);
