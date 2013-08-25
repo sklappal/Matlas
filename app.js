@@ -156,9 +156,12 @@ function App() {
     
     midpoint = SphericalToCanvas(points[Math.floor(points.length / 2)]);
     ctx.fillStyle = "black"
-    ctx.font = "24px Segoe UI"
+    ctx.font = "bold 24px Segoe UI"
     var text = (route.angle * 6371).toFixed(0) + " km";
     ctx.fillText(text, midpoint.x-50, midpoint.y);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeText(text, midpoint.x-50, midpoint.y);
   }
   
   function drawInstructions() {
