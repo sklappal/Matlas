@@ -10,7 +10,6 @@ function App() {
     };
     
     this.imageObj.src = 'world_map.jpg';
-    
   }
   
   function Draw() {
@@ -20,8 +19,7 @@ function App() {
     }
     drawInstructions();
   }
-  
-  
+    
   function GetContext() {
     return GetCanvas().getContext("2d");
   }
@@ -35,48 +33,51 @@ function App() {
   var routes = [];
   var drawComplement = false;
 
-
   function OnMouseDown(ev) {
     
     if (ev.which == 3) {
       routes = [];
       prev = undefined;
-      Draw();
-      return;
-    }
-    
-    if (ev.which == 2) {
+    } else if (ev.which == 2) {
       drawComplement = !drawComplement;
-      Draw();
-      return;
-    }
+    } else {
     
-    canv = ScreenToWorld(ev.clientX-2, ev.clientY-2);
-    pos = WorldToCartesian(canv); 
-    
-    if (prev != undefined) {
+      canv = ScreenToWorld(ev.clientX-2, ev.clientY-2);
       
-      if (almostEqual(prev.x, pos.x) && almostEqual(prev.y, pos.y) && almostEqual(prev.z, pos.z)) {
-        prev = undefined;
+      // Dodge singularities
+      var threshold = 0.01;
+      if (canv.y < threshold || canv.y > (1.0-threshold)) {
         return;
       }
+  
+      pos = WorldToCartesian(canv); 
       
-      routes.push(slerp(pos, prev));
-      Draw();
-      prev = undefined;
-    } else {
-      prev = pos;
-      var tmp = CartesianToCanvas(pos);
-      drawFilledCircle(tmp.x, tmp.y, 5, "magenta");
+      if (prev != undefined) {
+        
+        if (almostEqual(prev.x, pos.x) && almostEqual(prev.y, pos.y) && almostEqual(prev.z, pos.z)) {
+          prev = undefined;
+          return;
+        }
+        
+        routes.push(CreateRoute(prev, pos));
+        Draw();
+        prev = undefined;
+      } else {
+        prev = pos;
+        var tmp = CartesianToCanvas(pos);
+        drawFilledCircle(tmp.x, tmp.y, 5, "magenta");
+        return; // early on purpose
+      }
     }
+    Draw();
   }
   
   function onLeft(p) {
-    return (p.x < -0.5*Math.PI);
+    return (p.x < -0.1*Math.PI);
   }
   
   function onRight(p) {
-    return (p.x > 0.5*Math.PI);
+    return (p.x > 0.1*Math.PI);
   }
 
   // Interpolate linearly to the border, draw a line, then continue on the other side
@@ -158,10 +159,14 @@ function App() {
     ctx.fillStyle = "black"
     ctx.font = "bold 24px Segoe UI"
     var text = (route.angle * 6371).toFixed(0) + " km";
-    ctx.fillText(text, midpoint.x-50, midpoint.y);
+    
+    var textX = Math.max(20, midpoint.x-50);
+    var textY = Math.max(20, midpoint.y);
+    
+    ctx.fillText(text, textX, textY);
     ctx.strokeStyle = "white";
     ctx.lineWidth = 2;
-    ctx.strokeText(text, midpoint.x-50, midpoint.y);
+    ctx.strokeText(text, textX, textY);
   }
   
   function drawInstructions() {
@@ -191,8 +196,6 @@ function App() {
   // Spher: [-pi0, pi] x [0, pi]
   // Cartesian: [-1, 1] x [-1, 1] x [-1, 1]
   // LongLat: [-pi, pi] x [0, pi/2] (y mirrored)
-  
-  
   
   function ScreenToWorld(sx, sy) {
     rect = GetCanvas().getBoundingClientRect();
@@ -224,11 +227,11 @@ function App() {
   }
   
   function WorldToSpherical(coord) {
-    return {x: (coord.x - 0.5) * Math.PI * 2, y: coord.y * Math.PI};
+    return {x: (coord.x - 0.5) * Math.PI * 2, y: (coord.y) * Math.PI};
   }
   
   function SphericalToWorld(coord) {
-    var ret = {x: coord.x / (Math.PI * 2) + 0.5, y: coord.y / Math.PI};
+    var ret = {x: coord.x / (Math.PI * 2) + 0.5, y: (coord.y / Math.PI)};
     return ret;
   }
   
@@ -248,9 +251,23 @@ function App() {
     return {x: Math.atan2(coord.y, coord.x), y: Math.acos(coord.z)};
   }
   
-  function dot(pos1, pos2) {
+  function dot3(pos1, pos2) {
     return pos1.x * pos2.x + pos1.y * pos2.y + pos1.z * pos2.z;
   }
+  
+  function dist3(pos1, pos2) {
+    var tmp = {x: pos1.x-pos2.x, y: pos1.y-pos2.y, z: pos1.z-pos2.z};
+    return Math.sqrt(dot(tmp, tmp));
+  }
+  
+  function dot2(pos1, pos2) {
+    return pos1.x * pos2.x + pos1.y * pos2.y;
+  }
+  
+  function dist2(pos1, pos2) {
+    var tmp = {x: pos1.x-pos2.x, y: pos1.y-pos2.y};
+    return Math.sqrt(dot2(tmp, tmp));
+  } 
   
   function almostEqual(v1, v2) {
     return Math.abs(v1-v2) < 1e-6;
@@ -266,44 +283,46 @@ function App() {
     }
   }
   
-  function slerp(pos1, pos2) {
+  function slerp(pos1, pos2, t, omega, omegaCoeff) {
+    coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
+    coeff2 = Math.sin(t * omega) * omegaCoeff;
+
+    return {
+      x: pos1.x * coeff1 + pos2.x * coeff2,
+      y: pos1.y * coeff1 + pos2.y * coeff2,
+      z: pos1.z * coeff1 + pos2.z * coeff2
+    };
+  }
+    
+  function CreateRoute(pos1, pos2) {
     ret = []
-    omega = Math.acos(dot(pos1, pos2));
+    omega = Math.acos(dot3(pos1, pos2));
     assert(!almostZero(omega), "Zero angle between vectors");
     points = 50 * omega;
     incr = 1.0 / points;
     
     sinOmega = Math.sin(omega);
     omegaCoeff = 1.0 / sinOmega;
+    
     ret.push(CartesianToSpherical(pos1));
-    var t = 0;
-    for (i = 1; i < points-1; i++) {
-      t = i * incr;
-      
-      coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
-      coeff2 = Math.sin(t * omega) * omegaCoeff;
-      
-      ret.push(CartesianToSpherical({
-        x: pos1.x * coeff1 + pos2.x * coeff2,
-        y: pos1.y * coeff1 + pos2.y * coeff2,
-        z: pos1.z * coeff1 + pos2.z * coeff2
-        }));
+    var t = incr;
+    while (t < 1.0) { // 0.0 -> 1.0
+      ret.push(
+        CartesianToSpherical(
+          slerp(pos1, pos2, t, omega, omegaCoeff)
+          )
+        );
+      t += incr;
     }
     ret.push(CartesianToSpherical(pos2));
-    
-    ret2 = [];
-    
-    while (t * omega < 2 * Math.PI) {
-      coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
-      coeff2 = Math.sin(t * omega) * omegaCoeff;
-      
-      ret2.push(CartesianToSpherical({
-        x: pos1.x * coeff1 + pos2.x * coeff2,
-        y: pos1.y * coeff1 + pos2.y * coeff2,
-        z: pos1.z * coeff1 + pos2.z * coeff2
-        }));
+    ret2 = [CartesianToSpherical(pos2)]; // initialize with same endpoint
+    while (t * omega <= 2 * Math.PI) { // omega -> 2*pi
+      ret2.push(
+        CartesianToSpherical(
+          slerp(pos1, pos2, t, omega, omegaCoeff)
+          )
+        );
       t += incr;
-      
     }
     
     return {shortest: ret, complement: ret2, angle: omega};
