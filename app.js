@@ -55,7 +55,6 @@ function App() {
       if (prev != undefined) {
         
         if (almostEqual(prev.x, pos.x) && almostEqual(prev.y, pos.y) && almostEqual(prev.z, pos.z)) {
-          prev = undefined;
           return;
         }
         
@@ -72,22 +71,18 @@ function App() {
     Draw();
   }
   
-  function onLeft(p) {
-    return (p.x < -0.1*Math.PI);
-  }
-  
-  function onRight(p) {
-    return (p.x > 0.1*Math.PI);
+  // Line segment from p1 to p2 is shorter when traveled around the world 
+  function aroundTheWorld(p1, p2) {
+    return Math.abs(p1.x-p2.x) > Math.PI;
   }
 
   // Interpolate linearly to the border, draw a line, then continue on the other side
-
   function handleMidPoint(context, prevPointSpherical, curPoint) {
     var prevC = SphericalToCanvas(prevPointSpherical);
-    var left = onLeft(prevPointSpherical);
+    var left = prevC.x < (GetCanvas().width - prevC.x);
     
-    var distFromBorderPrev = left ? prevC.x : (GetCanvas().width - prevC.x); 
-    var distFromBorderCur = left ? (GetCanvas().width - curPoint.x) : curPoint.x;
+    var distFromBorderPrev = Math.min(prevC.x, GetCanvas().width - prevC.x); 
+    var distFromBorderCur = Math.min(GetCanvas().width - curPoint.x, curPoint.x);
     assert(distFromBorderPrev >= 0, "Distance not positive!");
     
     var dx = distFromBorderPrev + distFromBorderCur;
@@ -109,7 +104,7 @@ function App() {
     for (i = 1; i < points.length; i++) {
       var ps = points[i];
       var p = SphericalToCanvas(ps);
-      if ((onLeft(prev) && onRight(ps)) || (onRight(prev) && onLeft(ps))) {
+      if (aroundTheWorld(ps, prev)) {
         handleMidPoint(ctx, prev, p);
       }
       prev = ps;
@@ -193,7 +188,7 @@ function App() {
   
   // Screen/canvas: pixels [0, w] x [0, h]
   // World: [0,1] x [0,1]
-  // Spher: [-pi0, pi] x [0, pi]
+  // Spher: [-pi, pi] x [0, pi]
   // Cartesian: [-1, 1] x [-1, 1] x [-1, 1]
   // LongLat: [-pi, pi] x [0, pi/2] (y mirrored)
   
