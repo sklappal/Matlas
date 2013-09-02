@@ -71,18 +71,32 @@ function App() {
     }
     Draw();
   }
-  
+
+  // Line goes over the pole
+  function overThePole(p1, p2) {
+    return almostEqual(p1.x, p2.x - Math.PI) || almostEqual(p1.x, p2.x + Math.PI);
+  }
+     
+  function handleOverThePole(context, prevPoint, curPoint) {
+    var canvasHeight = GetCanvas().height;
+    var upperHalf = prevPoint.y < canvasHeight * 0.5;
+    var yCoord = upperHalf ? 0.0 : canvasHeight-1;
+    context.lineTo(prevPoint.x, yCoord);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(curPoint.x, yCoord);
+  }
+
   // Line segment from p1 to p2 is shorter when traveled around the world 
   function aroundTheWorld(p1, p2) {
     return Math.abs(p1.x-p2.x) > Math.PI;
   }
 
   // Interpolate linearly to the border, draw a line, then continue on the other side
-  function handleMidPoint(context, prevPointSpherical, curPoint) {
-    var prevC = SphericalToCanvas(prevPointSpherical);
-    var left = prevC.x < (GetCanvas().width - prevC.x);
+  function handleAroundTheWorld(context, prevPoint, curPoint) {
+    var left = prevPoint.x < 0.5 * GetCanvas().width;
     
-    var distFromBorderPrev = Math.min(prevC.x, GetCanvas().width - prevC.x); 
+    var distFromBorderPrev = Math.min(prevPoint.x, GetCanvas().width - prevPoint.x); 
     var distFromBorderCur = Math.min(GetCanvas().width - curPoint.x, curPoint.x);
     assert(distFromBorderPrev >= 0, "Distance not positive!");
     
@@ -90,14 +104,15 @@ function App() {
     assert(distFromBorderPrev <= dx, "WHAT");
     
     var t = distFromBorderPrev / dx;
-    var yCoord = Math.round(t * prevC.y + (1.0-t) * curPoint.y);
+    var yCoord = Math.round(t * prevPoint.y + (1.0-t) * curPoint.y);
     context.lineTo(left ? 0 : GetCanvas().width-1, yCoord);
     context.stroke();
     context.beginPath();
     context.moveTo(left ? GetCanvas().width-1 : 0, yCoord);
   }
 
-  function drawPolyLine(ctx, points) {
+  // Takes into account that the route may go over the pole or around the world. Cuts the path accordingly.
+  function drawRouteLine(ctx, points) {
     ctx.beginPath();
     var prev = points[0];
     p1 = SphericalToCanvas(prev);
@@ -105,8 +120,10 @@ function App() {
     for (i = 1; i < points.length; i++) {
       var ps = points[i];
       var p = SphericalToCanvas(ps);
-      if (aroundTheWorld(ps, prev)) {
-        handleMidPoint(ctx, prev, p);
+      if (overThePole(ps, prev)) {
+        handleOverThePole(ctx, SphericalToCanvas(prev), p);
+      } else if (aroundTheWorld(ps, prev)) {
+        handleAroundTheWorld(ctx, SphericalToCanvas(prev), p);
       }
       prev = ps;
       ctx.lineTo(p.x, p.y);
@@ -114,6 +131,16 @@ function App() {
     ctx.stroke();
   }
   
+  function drawPolyLine(ctx, points) {
+    ctx.beginPath();
+    p1 = SphericalToCanvas(points[0]);
+    ctx.moveTo(p1.x, p1.y);
+    for (i = 1; i < points.length; i++) {
+      var p = SphericalToCanvas(points[i]);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
   
   function drawFilledCircle(posx, posy, radius, color) {
     var ctx = GetContext();
@@ -136,12 +163,12 @@ function App() {
     
     ctx.lineWidth = 5;
     ctx.strokeStyle = "black"
-    drawPolyLine(ctx, points);
+    drawRouteLine(ctx, points);
     
     if (drawComplement) {
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = "blue"
-      drawPolyLine(ctx, route.complement);
+      drawRouteLine(ctx, route.complement);
     }
     
     drawFilledCircle(first.x, first.y, 5, "magenta");
@@ -149,7 +176,7 @@ function App() {
     
     ctx.lineWidth = 3;
     ctx.strokeStyle = "magenta"
-    drawPolyLine(ctx, points);
+    drawRouteLine(ctx, points);
     
     midpoint = SphericalToCanvas(points[Math.floor(points.length / 2)]);
     ctx.fillStyle = "black"
