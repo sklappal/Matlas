@@ -14,6 +14,7 @@ function App() {
   
   function Draw() {
     GetContext().drawImage(this.imageObj, 0, 0, GetCanvas().width, GetCanvas().height);
+    drawHelperLines();
     for (var i = 0; i < routes.length; i++) {
       drawRoute(routes[i]);
     }
@@ -138,8 +139,8 @@ function App() {
     drawPolyLine(ctx, points);
     
     if (drawComplement) {
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "grey"
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "blue"
       drawPolyLine(ctx, route.complement);
     }
     
@@ -168,9 +169,43 @@ function App() {
     var ctx = GetContext();
     ctx.font = "12px Segoe UI";
     ctx.fillStyle = "black";
-    ctx.fillText("Mouse 1: Draw routes", GetCanvas().width - 300, GetCanvas().height - 80);
-    ctx.fillText("Mouse 2: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", GetCanvas().width - 300, GetCanvas().height - 60);
-    ctx.fillText("Mouse 3: Clear routes", GetCanvas().width - 300, GetCanvas().height - 40);
+    var xPos = GetCanvas().width - 360;
+    var yPos = GetCanvas().height - 80;
+    ctx.fillText("Mouse 1: Draw routes", xPos, yPos);
+    yPos += 20;
+    ctx.fillText("Mouse 2: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
+    yPos += 20;
+    ctx.fillText("Mouse 3: Clear routes", xPos, yPos);
+  }
+  
+  function drawHelperLines() {
+    // Equator
+    drawLatitudes();
+    drawLongitudes();
+  }
+  
+  function drawLatitudes() {
+    var ctx = GetContext();
+    ctx.strokeStyle = "black";
+    var incr = Math.PI/8.0;
+    var yCoord = incr;
+    while (yCoord < Math.PI - 1e-1) {
+      ctx.lineWidth = almostEqual(yCoord, Math.PI*0.5) ? 0.6 : 0.2;
+      drawPolyLine(ctx, [{x: -Math.PI, y: yCoord}, {x: 0.0, y: yCoord}, {x: Math.PI, y: yCoord}]);
+      yCoord += incr;
+    }
+  }
+  
+  function drawLongitudes() {
+    var ctx = GetContext();
+    ctx.strokeStyle = "black";
+    var incr = Math.PI/6.0;
+    var xCoord = -Math.PI + incr;
+    while (xCoord < Math.PI - 1e-1) {
+      ctx.lineWidth = almostEqual(xCoord, 0.0) ? 0.6 : 0.2;
+      drawPolyLine(ctx, [{x: xCoord, y: 0.0}, {x: xCoord, y: Math.PI}]);
+      xCoord += incr;
+    }
   }
   
   function Log(coord, pre) {
