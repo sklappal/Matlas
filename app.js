@@ -206,29 +206,30 @@ function App() {
   }
   
   function drawHelperLines() {
-    drawLatitudes();
-    drawLongitudes();
+    var lineWidth = 0.1;
+    drawLatitudes(lineWidth);
+    drawLongitudes(lineWidth);
   }
   
-  function drawLatitudes() {
+  function drawLatitudes(lineWidth) {
     var ctx = GetContext();
     ctx.strokeStyle = "black";
     var incr = Math.PI/8.0;
     var yCoord = incr;
     while (yCoord < Math.PI - 1e-1) {
-      ctx.lineWidth = almostEqual(yCoord, Math.PI*0.5) ? 0.6 : 0.2;
+      ctx.lineWidth = almostEqual(yCoord, Math.PI*0.5) ? 3*lineWidth : lineWidth;
       drawPolyLine(ctx, [{x: -Math.PI, y: yCoord}, {x: 0.0, y: yCoord}, {x: Math.PI, y: yCoord}]);
       yCoord += incr;
     }
   }
   
-  function drawLongitudes() {
+  function drawLongitudes(lineWidth) {
     var ctx = GetContext();
     ctx.strokeStyle = "black";
     var incr = Math.PI/6.0;
     var xCoord = -Math.PI + incr;
     while (xCoord < Math.PI - 1e-1) {
-      ctx.lineWidth = almostEqual(xCoord, 0.0) ? 0.6 : 0.2;
+      ctx.lineWidth = almostEqual(xCoord, 0.0) ? 3*lineWidth : lineWidth;
       drawPolyLine(ctx, [{x: xCoord, y: 0.0}, {x: xCoord, y: Math.PI}]);
       xCoord += incr;
     }
