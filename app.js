@@ -179,7 +179,6 @@ function App() {
   }
   
   function drawHelperLines() {
-    // Equator
     drawLatitudes();
     drawLongitudes();
   }
@@ -354,6 +353,7 @@ function App() {
         );
       t += incr;
     }
+    ret2.push(CartesianToSpherical(pos1));
     
     return {shortest: ret, complement: ret2, angle: omega};
   }
