@@ -206,7 +206,7 @@ function App() {
   }
   
   function drawHelperLines() {
-    var lineWidth = 0.1;
+    var lineWidth = 0.2;
     drawLatitudes(lineWidth);
     drawLongitudes(lineWidth);
   }
