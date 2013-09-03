@@ -198,11 +198,11 @@ function App() {
     ctx.fillStyle = "black";
     var xPos = GetCanvas().width - 360;
     var yPos = GetCanvas().height - 80;
-    ctx.fillText("Mouse 1: Draw routes", xPos, yPos);
+    ctx.fillText("Left click: Draw routes", xPos, yPos);
     yPos += 20;
-    ctx.fillText("Mouse 2: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
+    ctx.fillText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
     yPos += 20;
-    ctx.fillText("Mouse 3: Clear routes", xPos, yPos);
+    ctx.fillText("Right click: Clear routes", xPos, yPos);
   }
   
   function drawHelperLines() {
