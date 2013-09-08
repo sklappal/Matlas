@@ -169,13 +169,9 @@ function App() {
     ctx.strokeStyle = "magenta"
     drawSplittedPath(shortPath);
     
-    midpoint = SphericalToCanvas(points[Math.floor(points.length / 2)]);
-
     var text = (route.angle * 6371).toFixed(0) + " km";
-    
-    var textX = Math.max(20, midpoint.x-50);
-    var textY = Math.max(20, midpoint.y);
-    myRenderer.drawKilometerText(text, textX, textY);
+    midpoint = SphericalToWorld(points[Math.floor(points.length / 2)]);
+    myRenderer.drawKilometerText(text, midpoint);
   }
   
   function drawInstructions() {
@@ -242,10 +238,6 @@ function App() {
     return { x: (sx - rect.left) / GetCanvas().width, y: (sy - rect.top) / GetCanvas().height };
   }
   
-  function WorldToCanvas(coord) {
-    return {x: coord.x * GetCanvas().width, y: coord.y * GetCanvas().height };
-  }
-
   function compose(f1, f2) {
     return function() {
       return f1(f2.apply(null, arguments));
@@ -255,12 +247,7 @@ function App() {
   WorldToCartesian = compose(SphericalToCartesian, WorldToSpherical);
   
   CartesianToWorld = compose(SphericalToWorld, CartesianToSpherical);
-  
-  CartesianToCanvas = compose(WorldToCanvas, CartesianToWorld);
-
-  SphericalToCanvas = compose(WorldToCanvas, SphericalToWorld);
-
- 
+   
   function WorldToLongLat(coord) {
     var y = Math.abs(coord.y - 0.5)* Math.PI;
     return {x: (coord.x - 0.5) * Math.PI * 2, y: y}; // Plate carrée
@@ -401,7 +388,10 @@ function Renderer(canvas) {
     ctx.fillText(text, xpos, ypos);
   }
   
-  this.drawKilometerText = function(text, xpos, ypos) {
+  this.drawKilometerText = function(text, coord) {
+    var midpoint = WorldToCanvas(coord);
+    var xpos = Math.max(20, midpoint.x-50);
+    var ypos = Math.max(20, midpoint.y);
     var ctx = GetContext();
     ctx.fillStyle = "black";
     ctx.font = "bold 24px Segoe UI";
