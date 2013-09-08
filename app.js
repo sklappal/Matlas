@@ -19,6 +19,11 @@ function App() {
       drawRoute(routes[i]);
     }
     drawInstructions();
+    
+    if (prev != undefined) {
+      myRenderer.drawFilledCircle(prev, 5, "magenta");
+    }
+    
   }
     
   function GetContext() {
@@ -33,6 +38,8 @@ function App() {
   
   var routes = [];
   var drawComplement = false;
+  var myRenderer = Renderer(GetCanvas());
+
 
   function OnMouseDown(ev) {
     
@@ -43,15 +50,13 @@ function App() {
       drawComplement = !drawComplement;
     } else {
     
-      canv = ScreenToWorld(ev.clientX-2, ev.clientY-2);
+      pos = ScreenToWorld(ev.clientX-2, ev.clientY-2);
       
       // Dodge singularities
       var threshold = 0.01;
-      if (canv.y < threshold || canv.y > (1.0-threshold)) {
+      if (pos.y < threshold || pos.y > (1.0-threshold)) {
         return;
       }
-  
-      pos = WorldToCartesian(canv); 
       
       if (prev != undefined) {
         
@@ -59,14 +64,10 @@ function App() {
           return;
         }
         
-        routes.push(CreateRoute(prev, pos));
-        Draw();
+        routes.push(CreateRoute(WorldToCartesian(prev), WorldToCartesian(pos)));
         prev = undefined;
       } else {
         prev = pos;
-        var tmp = CartesianToCanvas(pos);
-        drawFilledCircle(tmp.x, tmp.y, 5, "magenta");
-        return; // early on purpose
       }
     }
     Draw();
@@ -77,14 +78,10 @@ function App() {
     return almostEqual(p1.x, p2.x - Math.PI) || almostEqual(p1.x, p2.x + Math.PI);
   }
      
-  function handleOverThePole(context, prevPoint, curPoint) {
-    var canvasHeight = GetCanvas().height;
-    var upperHalf = prevPoint.y < canvasHeight * 0.5;
-    var yCoord = upperHalf ? 0.0 : canvasHeight-1;
-    context.lineTo(prevPoint.x, yCoord);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(curPoint.x, yCoord);
+  function handleOverThePole(prevPoint, curPoint) {
+    var upperHalf = prevPoint.y < Math.PI * 0.5;
+    var yCoord = upperHalf ? 0.0 : Math.PI - 1e-6;
+    return [{x: prevPoint.x, y: yCoord}, {x: curPoint.x, y: yCoord}];
   }
 
   // Line segment from p1 to p2 is shorter when traveled around the world 
@@ -93,116 +90,102 @@ function App() {
   }
 
   // Interpolate linearly to the border, draw a line, then continue on the other side
-  function handleAroundTheWorld(context, prevPoint, curPoint) {
-    var left = prevPoint.x < 0.5 * GetCanvas().width;
-    
-    var distFromBorderPrev = Math.min(prevPoint.x, GetCanvas().width - prevPoint.x); 
-    var distFromBorderCur = Math.min(GetCanvas().width - curPoint.x, curPoint.x);
+  function handleAroundTheWorld(prevPoint, curPoint) {
+    var left = prevPoint.x < 0.0;
+
+    var distFromBorderPrev = Math.PI - Math.abs(prevPoint.x); 
+    var distFromBorderCur = Math.PI - Math.abs(curPoint.x);
     assert(distFromBorderPrev >= 0, "Distance not positive!");
+    assert(distFromBorderCur >= 0, "Distance not positive!");
     
     var dx = distFromBorderPrev + distFromBorderCur;
-    assert(distFromBorderPrev <= dx, "WHAT");
     
     var t = distFromBorderPrev / dx;
-    var yCoord = Math.round(t * prevPoint.y + (1.0-t) * curPoint.y);
-    context.lineTo(left ? 0 : GetCanvas().width-1, yCoord);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(left ? GetCanvas().width-1 : 0, yCoord);
+    var yCoord = t * prevPoint.y + (1.0-t) * curPoint.y;
+    var ret = [];
+    var eps = 1e-10;
+    ret.push({x: left ? -Math.PI+eps : Math.PI-eps, y: yCoord});
+    ret.push({x: left ? Math.PI-eps : -Math.PI+eps, y: yCoord});
+    return ret;
   }
 
-  // Takes into account that the route may go over the pole or around the world. Cuts the path accordingly.
-  function drawRouteLine(ctx, points) {
-    ctx.beginPath();
+  // Takes into account that the route may go over the pole or around the world. Splits the path accordingly.
+  function splitPath(points) {
     var prev = points[0];
-    p1 = SphericalToCanvas(prev);
-    ctx.moveTo(p1.x, p1.y);
+    var curLine = [prev];
+    allLines = [];
     for (i = 1; i < points.length; i++) {
       var ps = points[i];
-      var p = SphericalToCanvas(ps);
+      
+      var cutPoint = undefined;
       if (overThePole(ps, prev)) {
-        handleOverThePole(ctx, SphericalToCanvas(prev), p);
+        cutPoint = handleOverThePole(prev, ps);
       } else if (aroundTheWorld(ps, prev)) {
-        handleAroundTheWorld(ctx, SphericalToCanvas(prev), p);
+        cutPoint = handleAroundTheWorld(prev, ps);
       }
+      
+      if (cutPoint != undefined) {
+        curLine.push(cutPoint[0]);
+        allLines.push(curLine);
+        curLine = [cutPoint[1]];
+      }
+      
       prev = ps;
-      ctx.lineTo(p.x, p.y);
+      curLine.push(ps);
     }
-    ctx.stroke();
+    
+    allLines.push(curLine);
+    
+    return allLines;
   }
   
-  function drawPolyLine(ctx, points) {
-    ctx.beginPath();
-    p1 = SphericalToCanvas(points[0]);
-    ctx.moveTo(p1.x, p1.y);
-    for (i = 1; i < points.length; i++) {
-      var p = SphericalToCanvas(points[i]);
-      ctx.lineTo(p.x, p.y);
+  function drawSplittedPath(path) {
+    for (var i = 0; i < path.length; i++) {
+      myRenderer.drawPolyLine(path[i].map(SphericalToWorld));
     }
-    ctx.stroke();
-  }
-  
-  function drawFilledCircle(posx, posy, radius, color) {
-    var ctx = GetContext();
-    ctx.beginPath();
-    var counterClockwise = false;
-    ctx.arc(posx, posy, radius, 0, 2 * Math.PI, counterClockwise);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "black";
-    ctx.stroke();
   }
   
   function drawRoute(route) {
-    var points = route.shortest;
     var ctx = GetContext();
-    
-    var first = SphericalToCanvas(points[0]);
-    var last = SphericalToCanvas(points[points.length-1]);
-    
     ctx.lineWidth = 5;
     ctx.strokeStyle = "black"
-    drawRouteLine(ctx, points);
+    var shortPath = splitPath(route.shortest);
+    drawSplittedPath(shortPath);
     
     if (drawComplement) {
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = "blue"
-      drawRouteLine(ctx, route.complement);
+      drawSplittedPath(splitPath(route.complement));
     }
     
-    drawFilledCircle(first.x, first.y, 5, "magenta");
-    drawFilledCircle(last.x, last.y, 5, "magenta");
+    var points = route.shortest;
+    var first = SphericalToWorld(points[0]);
+    var last = SphericalToWorld(points[points.length-1]);
+    
+    myRenderer.drawFilledCircle(first, 5, "magenta");
+    myRenderer.drawFilledCircle(last, 5, "magenta");
     
     ctx.lineWidth = 3;
     ctx.strokeStyle = "magenta"
-    drawRouteLine(ctx, points);
+    drawSplittedPath(shortPath);
     
     midpoint = SphericalToCanvas(points[Math.floor(points.length / 2)]);
-    ctx.fillStyle = "black"
-    ctx.font = "bold 24px Segoe UI"
+
     var text = (route.angle * 6371).toFixed(0) + " km";
     
     var textX = Math.max(20, midpoint.x-50);
     var textY = Math.max(20, midpoint.y);
-    
-    ctx.fillText(text, textX, textY);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.strokeText(text, textX, textY);
+    myRenderer.drawKilometerText(text, textX, textY);
   }
   
   function drawInstructions() {
-    var ctx = GetContext();
-    ctx.font = "12px Segoe UI";
-    ctx.fillStyle = "black";
     var xPos = GetCanvas().width - 360;
     var yPos = GetCanvas().height - 80;
-    ctx.fillText("Left click: Draw routes", xPos, yPos);
+    myRenderer.drawInstructionText("Left click: Draw routes", xPos, yPos);
     yPos += 20;
-    ctx.fillText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
+    myRenderer.drawInstructionText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
     yPos += 20;
-    ctx.fillText("Right click: Clear routes", xPos, yPos);
+    myRenderer.drawInstructionText("Right click: Clear routes", xPos, yPos);
   }
   
   function drawHelperLines() {
@@ -218,7 +201,7 @@ function App() {
     var yCoord = incr;
     while (yCoord < Math.PI - 1e-1) {
       ctx.lineWidth = almostEqual(yCoord, Math.PI*0.5) ? 3*lineWidth : lineWidth;
-      drawPolyLine(ctx, [{x: -Math.PI, y: yCoord}, {x: 0.0, y: yCoord}, {x: Math.PI, y: yCoord}]);
+      myRenderer.drawPolyLine([{x: -Math.PI, y: yCoord}, {x: 0.0, y: yCoord}, {x: Math.PI, y: yCoord}].map(SphericalToWorld));
       yCoord += incr;
     }
   }
@@ -230,7 +213,7 @@ function App() {
     var xCoord = -Math.PI + incr;
     while (xCoord < Math.PI - 1e-1) {
       ctx.lineWidth = almostEqual(xCoord, 0.0) ? 3*lineWidth : lineWidth;
-      drawPolyLine(ctx, [{x: xCoord, y: 0.0}, {x: xCoord, y: Math.PI}]);
+      myRenderer.drawPolyLine([{x: xCoord, y: 0.0}, {x: xCoord, y: Math.PI}].map(SphericalToWorld));
       xCoord += incr;
     }
   }
@@ -308,24 +291,6 @@ function App() {
     return {x: Math.atan2(coord.y, coord.x), y: Math.acos(coord.z)};
   }
   
-  function dot3(pos1, pos2) {
-    return pos1.x * pos2.x + pos1.y * pos2.y + pos1.z * pos2.z;
-  }
-  
-  function dist3(pos1, pos2) {
-    var tmp = {x: pos1.x-pos2.x, y: pos1.y-pos2.y, z: pos1.z-pos2.z};
-    return Math.sqrt(dot(tmp, tmp));
-  }
-  
-  function dot2(pos1, pos2) {
-    return pos1.x * pos2.x + pos1.y * pos2.y;
-  }
-  
-  function dist2(pos1, pos2) {
-    var tmp = {x: pos1.x-pos2.x, y: pos1.y-pos2.y};
-    return Math.sqrt(dot2(tmp, tmp));
-  } 
-  
   function almostEqual(v1, v2) {
     return Math.abs(v1-v2) < 1e-6;
   }
@@ -340,6 +305,10 @@ function App() {
     }
   }
   
+  function dot3(p1, p2) {
+    return p1.x*p2.x + p1.y*p2.y + p1.z*p2.z;
+  }
+  
   function slerp(pos1, pos2, t, omega, omegaCoeff) {
     coeff1 = Math.sin((1.0-t) * omega) * omegaCoeff;
     coeff2 = Math.sin(t * omega) * omegaCoeff;
@@ -350,9 +319,9 @@ function App() {
       z: pos1.z * coeff1 + pos2.z * coeff2
     };
   }
-    
+  
   function CreateRoute(pos1, pos2) {
-    ret = []
+    
     omega = Math.acos(dot3(pos1, pos2));
     assert(!almostZero(omega), "Zero angle between vectors");
     points = 50 * omega;
@@ -361,30 +330,91 @@ function App() {
     sinOmega = Math.sin(omega);
     omegaCoeff = 1.0 / sinOmega;
     
-    ret.push(CartesianToSpherical(pos1));
+    // First points are known
+    mainPath = [CartesianToSpherical(pos1)];
+    complementPath = [CartesianToSpherical(pos2)]; 
     var t = incr;
-    while (t < 1.0) { // 0.0 -> 1.0
-      ret.push(
+    var limit = 2*Math.PI / omega;
+    while (t < limit) { // t: 0 -> 2 pi / omega. Omega is always <= Pi, so t goes to at least 2.
+      
+      // t < 1.0 means we are filling the shortest path, opposite means longest
+      curList = (t < 1.0) ? mainPath : complementPath;
+      
+      curList.push(
         CartesianToSpherical(
           slerp(pos1, pos2, t, omega, omegaCoeff)
           )
         );
       t += incr;
     }
-    ret.push(CartesianToSpherical(pos2));
-    ret2 = [CartesianToSpherical(pos2)]; // initialize with same endpoint
-    while (t * omega <= 2 * Math.PI) { // omega -> 2*pi
-      ret2.push(
-        CartesianToSpherical(
-          slerp(pos1, pos2, t, omega, omegaCoeff)
-          )
-        );
-      t += incr;
-    }
-    ret2.push(CartesianToSpherical(pos1));
-    
-    return {shortest: ret, complement: ret2, angle: omega};
+    // Last points are known
+    mainPath.push(CartesianToSpherical(pos2));
+    complementPath.push(CartesianToSpherical(pos1));
+    return {shortest: mainPath, complement: complementPath, angle: omega};
   }
+  
+  return this;
+}
+
+
+function Renderer(canvas) {
+  
+  var myCanvas = canvas;
+  
+  function GetContext() {
+    return myCanvas.getContext("2d");
+  }  
+ 
+  function GetCanvas() {
+    return myCanvas;
+  }
+ 
+  this.drawPolyLine = function(points) {
+    var ctx = GetContext();
+    ctx.beginPath();
+    p1 = WorldToCanvas(points[0]);
+    ctx.moveTo(p1.x, p1.y);
+    for (i = 1; i < points.length; i++) {
+      var p = WorldToCanvas(points[i]);
+      ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+  }
+  
+  this.drawFilledCircle = function(coord, radius, color) {
+    var p = WorldToCanvas(coord);
+    var ctx = GetContext();
+    ctx.beginPath();
+    var counterClockwise = false;
+    ctx.arc(p.x, p.y, radius, 0, 2 * Math.PI, counterClockwise);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "black";
+    ctx.stroke();
+  }
+  
+  this.drawInstructionText = function(text, xpos, ypos) {
+    var ctx = GetContext();
+    ctx.font = "12px Segoe UI";
+    ctx.fillStyle = "black";
+    ctx.fillText(text, xpos, ypos);
+  }
+  
+  this.drawKilometerText = function(text, xpos, ypos) {
+    var ctx = GetContext();
+    ctx.fillStyle = "black";
+    ctx.font = "bold 24px Segoe UI";
+    ctx.fillText(text, xpos, ypos);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeText(text, xpos, ypos);
+  }
+  
+  function WorldToCanvas(coord) {
+    return {x: coord.x * GetCanvas().width, y: coord.y * GetCanvas().height };
+  }
+  
   
   return this;
 }
