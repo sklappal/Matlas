@@ -398,8 +398,8 @@ function App() {
     assert(!almostZero(omega), "Zero angle between vectors");
     
     if (almostEqual(omega, Math.PI)) { // Directly antipodal points
-      var newPos2 = vec3normalize(vec3sum(pos2, {x: 1e-4, y: -1e-4, z: 1e-4})); // deterministic perturbation
-      omega = Math.acos(dot3(pos1, newPos2));
+      pos2 = vec3normalize(vec3sum(pos2, {x: 1e-4, y: -1e-4, z: 1e-4})); // deterministic perturbation
+      omega = Math.acos(dot3(pos1, pos2));
       assert(!almostEqual(omega, Math.PI), "Perturbation ineffective!");
     }
     
