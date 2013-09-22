@@ -24,6 +24,15 @@ canvas {
   margin-left: -780px;
 }
 
+canvas.main {
+  z-index: 0;
+}
+
+canvas.overlay {
+  z-index: 1;
+}
+
+
 </style>
 </head>
 
@@ -31,7 +40,8 @@ canvas {
 
 <div align="center">
   <!-- image size 1920x1200 -->
-<canvas id="canvas" width="1560" height="900" oncontextmenu="return false;">&nbsp;</canvas>
+<canvas id="canvas" class="main" width="1560" height="900" oncontextmenu="return false;">&nbsp;</canvas>
+<canvas id="overlayCanvas" class="overlay" width="1560" height="900" oncontextmenu="return false;">&nbsp;</canvas>
 </div>
 
 </body>
