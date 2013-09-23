@@ -33,6 +33,7 @@ function App() {
     DrawAntipodalPos();
     DrawCrossHair();
     DrawCurrentRoute();
+    DrawCoordinates();
   }
   
   function DrawAntipodalPos() {
@@ -51,9 +52,24 @@ function App() {
   function DrawCurrentRoute() {
     if (prevClick != undefined) {
       if (!vector2AlmostEqual(prevClick, curPos)) {
-        curRoute = CreateRoute(WorldToCartesian(prevClick), WorldToCartesian(curPos));
+        var curRoute = CreateRoute(WorldToCartesian(prevClick), WorldToCartesian(curPos));
         DrawPath(curRoute.shortest, 1, "magenta", myOverlayRenderer);
       }
+    }
+  }
+  
+  function DrawCoordinates() {
+    if (curPos != undefined) {
+      var canvasCoords = myOverlayRenderer.WorldToCanvas(curPos);
+      var longlat = WorldToLongLat(curPos);
+      var lng = longlat.x;
+      var lat = longlat.y;
+      var xPos = Math.min(canvasCoords.x+2, GetCanvas().width - 45);
+      var suf = curPos.x >= 0.5 ? "E" : "W"; 
+      myOverlayRenderer.drawInstructionText(lng.toFixed(2) + suf, xPos, 15, "red");
+      suf = curPos.y >= 0.5 ? "S" : "N";
+      var yPos = Math.max(Math.max(15, canvasCoords.y-2), 30); // The other max is to avoid the x-label in the upper corner
+      myOverlayRenderer.drawInstructionText(lat.toFixed(2) + suf, 5, yPos, "red");
     }
   }
   
@@ -88,7 +104,7 @@ function App() {
   var myOverlayRenderer = new Renderer(GetOverlayCanvas());
 
   function OnMouseMove(ev) {
-    var pos = ScreenToWorld(ev.clientX-2, ev.clientY-2);
+    var pos = ScreenToWorld(ev.clientX, ev.clientY);
     var posCartesian = WorldToCartesian(pos);
     
     posCartesian.x *= -1.0;
@@ -111,7 +127,7 @@ function App() {
       drawComplement = !drawComplement;
     } else {
     
-      pos = ScreenToWorld(ev.clientX-2, ev.clientY-2);
+      pos = ScreenToWorld(ev.clientX, ev.clientY);
       
       // Dodge singularities
       var threshold = 0.01;
@@ -237,11 +253,11 @@ function App() {
   function DrawInstructions() {
     var xPos = GetCanvas().width - 360;
     var yPos = GetCanvas().height - 80;
-    myRenderer.drawInstructionText("Left click: Draw routes", xPos, yPos);
+    myRenderer.drawInstructionText("Left click: Draw routes", xPos, yPos, "black");
     yPos += 20;
-    myRenderer.drawInstructionText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos);
+    myRenderer.drawInstructionText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos, "black");
     yPos += 20;
-    myRenderer.drawInstructionText("Right click: Clear routes", xPos, yPos);
+    myRenderer.drawInstructionText("Right click: Clear routes", xPos, yPos, "black");
   }
   
   function DrawLongLats() {
@@ -300,8 +316,9 @@ function App() {
   // LongLat: [-pi, pi] x [0, pi/2] (y mirrored)
   
   function ScreenToWorld(sx, sy) {
-    rect = GetCanvas().getBoundingClientRect();
-    return { x: (sx - rect.left) / GetCanvas().width, y: (sy - rect.top) / GetCanvas().height };
+    var rect = GetCanvas().getBoundingClientRect();
+    var ret = { x: (sx - rect.left) / (GetCanvas().width + 1.0), y: (sy - rect.top) / (GetCanvas().height + 1.0)}; // The +1.0 comes from the 1px border
+    return ret;
   }
   
   function compose(f1, f2) {
@@ -315,8 +332,9 @@ function App() {
   CartesianToWorld = compose(SphericalToWorld, CartesianToSpherical);
    
   function WorldToLongLat(coord) {
+    var x = Math.abs(coord.x - 0.5) * Math.PI * 2;
     var y = Math.abs(coord.y - 0.5)* Math.PI;
-    return {x: (coord.x - 0.5) * Math.PI * 2, y: y}; // Plate carrée
+    return RadToDeg({x: x, y: y}); // Plate carrée
   }
   
   function WorldToSpherical(coord) {
@@ -454,17 +472,17 @@ function Renderer(canvas) {
     ctx.lineWidth = width;
     ctx.strokeStyle = color;
     ctx.beginPath();
-    var p1 = WorldToCanvas(points[0]);
+    var p1 = this.WorldToCanvas(points[0]);
     ctx.moveTo(p1.x, p1.y);
     for (i = 1; i < points.length; i++) {
-      var p = WorldToCanvas(points[i]);
+      var p = this.WorldToCanvas(points[i]);
       ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
   }
   
   this.drawCircle = function(coord, radius, color) {
-    var p = WorldToCanvas(coord);
+    var p = this.WorldToCanvas(coord);
     var ctx = this.GetContext();
     ctx.beginPath();
     var counterClockwise = false;
@@ -475,7 +493,7 @@ function Renderer(canvas) {
   }
       
   this.drawFilledCircle = function(coord, radius, color) {
-    var p = WorldToCanvas(coord);
+    var p = this.WorldToCanvas(coord);
     var ctx = this.GetContext();
     ctx.beginPath();
     var counterClockwise = false;
@@ -487,15 +505,15 @@ function Renderer(canvas) {
     ctx.stroke();
   }
   
-  this.drawInstructionText = function(text, xpos, ypos) {
+  this.drawInstructionText = function(text, xpos, ypos, color) {
     var ctx = this.GetContext();
     ctx.font = "12px Segoe UI";
-    ctx.fillStyle = "black";
+    ctx.fillStyle = color;
     ctx.fillText(text, xpos, ypos);
   }
   
   this.drawKilometerText = function(text, coord) {
-    var midpoint = WorldToCanvas(coord);
+    var midpoint = this.WorldToCanvas(coord);
     var xpos = Math.max(20, midpoint.x-50);
     var ypos = Math.max(20, midpoint.y);
     var ctx = this.GetContext();
@@ -507,7 +525,7 @@ function Renderer(canvas) {
     ctx.strokeText(text, xpos, ypos);
   }
   
-  function WorldToCanvas(coord) {
+  this.WorldToCanvas = function(coord) {
     return {x: coord.x * GetCanvas().width, y: coord.y * GetCanvas().height };
   }
   
