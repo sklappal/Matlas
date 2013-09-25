@@ -267,11 +267,11 @@ function App() {
     var xPos = GetCanvas().width - 360;
     var yPos = GetCanvas().height - 80;
     var drawing = prevClick != undefined;
-    myRenderer.drawInstructionText("Left click: " + (drawing ? "End" : "Start") + " route", xPos, yPos, "black");
+    myRenderer.drawInstructionText("Left click: " + (drawing ? "Finish" : "Start") + " route", xPos, yPos, "black");
     yPos += 20;
-    myRenderer.drawInstructionText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos, "black");
+    myRenderer.drawInstructionText("Middle click: " + (drawComplement ? "Don't display" : "Display") + " complement route", xPos,  yPos, "black");
     yPos += 20;
-    myRenderer.drawInstructionText("Right click: " + (drawing ? "Cancel route" : "Clear routes"), xPos, yPos, "black");
+    myRenderer.drawInstructionText("Right click: " + (drawing ? "Cancel route" : "Clear all routes"), xPos, yPos, "black");
   }
   
   function DrawLongLats() {
