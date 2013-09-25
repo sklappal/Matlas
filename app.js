@@ -38,7 +38,7 @@ function App() {
   
   function DrawAntipodalPos() {
     if (curAntipodalPos != undefined) {
-      myOverlayRenderer.drawCircle(curAntipodalPos, 3, "red");
+      myOverlayRenderer.drawCircle(curAntipodalPos, 3, "black");
     }
   }
   
@@ -51,9 +51,14 @@ function App() {
   
   function DrawCurrentRoute() {
     if (prevClick != undefined) {
+      assert(curPos != undefined, "curpos != undefined"); // curpos can only be undefind when the mouse hasn't visited the canvas
       if (!vector2AlmostEqual(prevClick, curPos)) {
         var curRoute = CreateRoute(WorldToCartesian(prevClick), WorldToCartesian(curPos));
         DrawPath(curRoute.shortest, 1, "magenta", myOverlayRenderer);
+        DrawPath(curRoute.radius, 1, "blue", myOverlayRenderer);
+        
+        var canvasCoords = myOverlayRenderer.WorldToCanvas(curPos);        
+        myOverlayRenderer.drawInstructionText(GetRouteLengthText(curRoute), canvasCoords.x-55, canvasCoords.y+15, "black");
       }
     }
   }
@@ -65,11 +70,11 @@ function App() {
       var lng = longlat.x;
       var lat = longlat.y;
       var xPos = Math.min(canvasCoords.x+2, GetCanvas().width - 45);
-      var suf = curPos.x >= 0.5 ? "E" : "W"; 
-      myOverlayRenderer.drawInstructionText(lng.toFixed(2) + suf, xPos, 15, "red");
-      suf = curPos.y >= 0.5 ? "S" : "N";
+      var suf = curPos.x >= 0.5 ? " E" : " W"; 
+      myOverlayRenderer.drawInstructionText(lng.toFixed(2) + suf, xPos, 15, "black");
+      suf = curPos.y >= 0.5 ? " S" : " N";
       var yPos = Math.max(Math.max(15, canvasCoords.y-2), 30); // The other max is to avoid the x-label in the upper corner
-      myOverlayRenderer.drawInstructionText(lat.toFixed(2) + suf, 5, yPos, "red");
+      myOverlayRenderer.drawInstructionText(lat.toFixed(2) + suf, 5, yPos, "black");
     }
   }
   
@@ -121,8 +126,12 @@ function App() {
 
   function OnMouseDown(ev) {
     if (ev.which == 3) {
-      routes = [];
-      prevClick = undefined;
+      // If drawing a route, just cancel that route. 
+      if (prevClick != undefined) {
+        prevClick = undefined;  
+      } else {
+        routes = [];
+      }
     } else if (ev.which == 2) {
       drawComplement = !drawComplement;
     } else {
@@ -245,19 +254,24 @@ function App() {
     
     DrawPath(route.shortest, 3, "magenta", myRenderer);
     
-    var text = (route.angle * 6371).toFixed(0) + " km";
+    var text = GetRouteLengthText(route);
     midpoint = SphericalToWorld(points[Math.floor(points.length / 2)]);
     myRenderer.drawKilometerText(text, midpoint);
+  }
+  
+  function GetRouteLengthText(route) {
+    return (route.angle * 6371).toFixed(0) + " km";
   }
   
   function DrawInstructions() {
     var xPos = GetCanvas().width - 360;
     var yPos = GetCanvas().height - 80;
-    myRenderer.drawInstructionText("Left click: Draw routes", xPos, yPos, "black");
+    var drawing = prevClick != undefined;
+    myRenderer.drawInstructionText("Left click: " + (drawing ? "End" : "Start") + " route", xPos, yPos, "black");
     yPos += 20;
     myRenderer.drawInstructionText("Middle click: Toggle complement route (" + (drawComplement ? "ON" : "OFF") + ")", xPos,  yPos, "black");
     yPos += 20;
-    myRenderer.drawInstructionText("Right click: Clear routes", xPos, yPos, "black");
+    myRenderer.drawInstructionText("Right click: " + (drawing ? "Cancel route" : "Clear routes"), xPos, yPos, "black");
   }
   
   function DrawLongLats() {
@@ -389,13 +403,29 @@ function App() {
     return {x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z};
   }
   
+  function vec3diff(v1, v2) {
+    return {x: v1.x - v2.x, y: v1.y - v2.y, z: v1.z - v2.z};
+  }
+  
+  function vec3scale(v, a) {
+    return {x: a*v.x, y: a*v.y, z: a*v.z};
+  }
+  
   function vec3normalize(v) {
     var len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
     if (almostZero(len)) {
       return {x: 1.0, y: 0.0, z: 0.0};
     }
     var invlen = 1.0 / len;
-    return {x: v.x * invlen, y: v.y * invlen, z: v.z * invlen};
+    return vec3scale(v, invlen);
+  }
+  
+  function vec3cross(v1, v2) {
+    return {
+      x: v1.y*v2.z - v1.z*v2.y,
+      y: v1.z*v2.x - v1.x*v2.z,
+      z: v1.x*v2.y - v1.y*v2.x
+    };
   }
   
   
@@ -412,7 +442,8 @@ function App() {
   
   function CreateRoute(pos1, pos2) {
     
-    var omega = Math.acos(dot3(pos1, pos2));
+    var cosOmega = dot3(pos1, pos2);
+    var omega = Math.acos(cosOmega);
     assert(!almostZero(omega), "Zero angle between vectors");
     
     if (almostEqual(omega, Math.PI)) { // Directly antipodal points
@@ -421,7 +452,8 @@ function App() {
       assert(!almostEqual(omega, Math.PI), "Perturbation ineffective!");
     }
     
-    var points = 50 * omega;
+    var pointsPerRadian = 40;
+    var points = pointsPerRadian * omega;
     var incr = 1.0 / points;
     
     var sinOmega = Math.sin(omega);
@@ -432,7 +464,8 @@ function App() {
     var mainPath = [CartesianToSpherical(pos1)];
     var complementPath = [CartesianToSpherical(pos2)]; 
     var t = incr;
-    var limit = 2*Math.PI / omega;
+    var twoPi = 2*Math.PI;
+    var limit = twoPi / omega;
     while (t < limit) { // t: 0 -> 2 pi / omega. Omega is always <= Pi, so t goes to at least 2.
       
       // t < 1.0 means we are filling the shortest path, opposite means longest
@@ -448,7 +481,50 @@ function App() {
     // Last points are known
     mainPath.push(CartesianToSpherical(pos2));
     complementPath.push(CartesianToSpherical(pos1));
-    return {shortest: mainPath, complement: complementPath, angle: omega};
+    
+    // pos1 is a plane normal for a plane that intersects the sphere at pos2
+    // the intersection is a circle with radius circleRadius
+    // the circle can be parameterized with the radius and a theta
+    // for that, we need 2 orthonormal vectors on the plane, v1 and v2
+    // v1 is from pos2 to circle midpoint. v2 is the crossproduct of v2 and the normal.
+    // The parameterization is x = midpoint + radius*cos(theta)*v1 + radius*sin(theta)*v2
+    
+    var circleRadius = Math.sqrt(1 - cosOmega*cosOmega);
+    var circleMidPoint = vec3scale(pos1, cosOmega);
+    var v1 = vec3normalize(vec3diff(pos2, circleMidPoint));
+    var v2 = vec3cross(v1, pos1);
+    
+    assert(almostZero(dot3(v1, v2)));
+   
+    var circlePoints = pointsPerRadian*twoPi*circleRadius;
+    incr = twoPi / circlePoints;
+    var theta = 0.0;
+    var points = [];
+    for (var i = 0; i < circlePoints; i++) {
+      var s = Math.cos(theta);
+      var t = Math.sin(theta);
+      
+      /*
+      var sv1 = vec3scale(v1, s);
+      var tv2 = vec3scale(v2, t);
+      var spt = vec3scale(vec3sum(sv1, tv2), circleRadius);
+      var point = vec3sum(circleMidPoint, spt);*/
+      // assert(almostEqual(dot3(point, point) 1.0)) // on the sphere
+      // inline the functions in hopes of additional performance
+     
+     var point = {
+       x: (s*v1.x + t*v2.x)*circleRadius + circleMidPoint.x,
+       y: (s*v1.y + t*v2.y)*circleRadius + circleMidPoint.y,
+       z: (s*v1.z + t*v2.z)*circleRadius + circleMidPoint.z
+     }
+     
+      points.push(CartesianToSpherical(point));
+      theta += incr
+    }
+    // close the loop
+    points.push(points[0]);
+    
+    return {shortest: mainPath, complement: complementPath, radius: points, angle: omega};
   }
   
   return this;
@@ -507,7 +583,7 @@ function Renderer(canvas) {
   
   this.drawInstructionText = function(text, xpos, ypos, color) {
     var ctx = this.GetContext();
-    ctx.font = "12px Segoe UI";
+    ctx.font = "bold 12px Segoe UI";
     ctx.fillStyle = color;
     ctx.fillText(text, xpos, ypos);
   }
