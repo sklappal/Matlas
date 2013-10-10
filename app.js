@@ -110,6 +110,12 @@ function App() {
 
   function OnMouseMove(ev) {
     var pos = ScreenToWorld(ev.clientX, ev.clientY);
+    
+    // Dodge singularities      
+    if (AboveThreshold(pos)) {
+      return;
+    }
+    
     var posCartesian = WorldToCartesian(pos);
     
     posCartesian.x *= -1.0;
@@ -123,6 +129,11 @@ function App() {
     DrawOverlay();
   }
 
+
+  function AboveThreshold(pos) {
+    var threshold = 0.01;
+    return pos.y < threshold || pos.y > (1.0-threshold);
+  }
 
   function OnMouseDown(ev) {
     if (ev.which == 3) {
@@ -138,9 +149,8 @@ function App() {
     
       pos = ScreenToWorld(ev.clientX, ev.clientY);
       
-      // Dodge singularities
-      var threshold = 0.01;
-      if (pos.y < threshold || pos.y > (1.0-threshold)) {
+      // Dodge singularities      
+      if (AboveThreshold(pos)) {
         return;
       }
       
@@ -414,7 +424,7 @@ function App() {
   function vec3normalize(v) {
     var len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
     if (almostZero(len)) {
-      return {x: 1.0, y: 0.0, z: 0.0};
+      return {x: 1.0, y: 0.0, z: 0.0}; // arbitrary
     }
     var invlen = 1.0 / len;
     return vec3scale(v, invlen);
@@ -483,13 +493,13 @@ function App() {
     complementPath.push(CartesianToSpherical(pos1));
     
     // pos1 is a plane normal for a plane that intersects the sphere at pos2
-    // the intersection is a circle with radius circleRadius
+    // the intersection is a circle with radius circleRadius (== sin Omega)
     // the circle can be parameterized with the radius and a theta
     // for that, we need 2 orthonormal vectors on the plane, v1 and v2
     // v1 is from pos2 to circle midpoint. v2 is the crossproduct of v2 and the normal.
     // The parameterization is x = midpoint + radius*cos(theta)*v1 + radius*sin(theta)*v2
     
-    var circleRadius = Math.sqrt(1 - cosOmega*cosOmega);
+    var circleRadius = sinOmega;
     var circleMidPoint = vec3scale(pos1, cosOmega);
     var v1 = vec3normalize(vec3diff(pos2, circleMidPoint));
     var v2 = vec3cross(v1, pos1);
@@ -519,7 +529,7 @@ function App() {
      }
      
       points.push(CartesianToSpherical(point));
-      theta += incr
+      theta += incr;
     }
     // close the loop
     points.push(points[0]);
